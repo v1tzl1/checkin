@@ -13,9 +13,8 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
-import java.util.HashMap;
+import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
 
 import javax.swing.JOptionPane;
 
@@ -25,6 +24,7 @@ public class DataBase {
 
 	private static Connection connection;
 	
+	private final static int SQL_TIMEOUT = 0;
 	// Field indices for CSV dump file
 	private final static int CSV_TICKET_NUMBER = 3;
 	private final static int CSV_PRODUCT_NAME = 4;
@@ -38,16 +38,106 @@ public class DataBase {
 	private static String ticketid = null;
 	private static Status ticketstatus = Status.Invalid;
 	private static String ticketoptions = null;
+	private static String ticketname = null;
 	
-	private static String TABLE_NAME = "tickets";
+	private static String TABLE_NAME = "";
 	public enum Status { Unused, Used, Invalid};
 	private final static String[] STR_STATUS = {"Unused", "Used", "Invalid"};
 	
-	public static void checkInTicket(String id, Component parent) {
-		ticketid = id;
-
+	public static synchronized String getNumUsed() {
+		int ret = -1;
 		try {
 			Statement statement = connection.createStatement();
+			statement.setQueryTimeout(SQL_TIMEOUT);
+			
+			ResultSet result = statement.executeQuery("SELECT COUNT(*) FROM "+TABLE_NAME+" WHERE use_counter > 0 AND valid = 1");
+			result.next();
+			ret = result.getInt(1);
+			
+			statement.close();
+		} catch (SQLException e) {
+			e.printStackTrace();
+		}
+		
+		return Integer.toString(ret);
+	}
+	
+	public static synchronized String getNumUnused() {
+		int ret = -1;
+		try {
+			Statement statement = connection.createStatement();
+			statement.setQueryTimeout(SQL_TIMEOUT);
+			
+			ResultSet result = statement.executeQuery("SELECT COUNT(*) FROM "+TABLE_NAME+" WHERE use_counter = 0 AND valid = 1");
+			result.next();
+			ret = result.getInt(1);
+			
+			statement.close();
+		} catch (SQLException e) {
+			e.printStackTrace();
+		}
+		
+		if(ret == 0) {
+			if(!getNumTotal().equals("0")) {
+				JOptionPane.showMessageDialog(null, "Get on your couch!", "Feierabend", JOptionPane.INFORMATION_MESSAGE);
+			}
+		}
+		return Integer.toString(ret);
+	}
+	
+	public static synchronized String getNumInvalid() {
+		int ret = -1;
+		try {
+			Statement statement = connection.createStatement();
+			statement.setQueryTimeout(SQL_TIMEOUT);
+			
+			ResultSet result = statement.executeQuery("SELECT COUNT(*) FROM "+TABLE_NAME+" WHERE valid = 0");
+			result.next();
+			ret = result.getInt(1);
+			
+			statement.close();
+		} catch (SQLException e) {
+			e.printStackTrace();
+		}
+		
+		return Integer.toString(ret);
+	}
+	
+	public static synchronized String getNumTotal() {
+		int ret = -1;
+		try {
+			Statement statement = connection.createStatement();
+			statement.setQueryTimeout(SQL_TIMEOUT);
+			
+			ResultSet result = statement.executeQuery("SELECT COUNT(*) FROM "+TABLE_NAME);
+			result.next();
+			ret = result.getInt(1);
+			
+			statement.close();
+		} catch (SQLException e) {
+			e.printStackTrace();
+		}
+		
+		return Integer.toString(ret);
+	}
+	
+	
+	public static synchronized void checkInTicket(String id, Component parent) {
+		
+		// First parse to int, then back to String to make sure it just contains numeric characters
+		try {
+			ticketid = Integer.toString(Integer.parseInt(id));
+		} catch (NumberFormatException e) {
+			//JOptionPane.showMessageDialog(parent, "'"+id+"' is not a valid number", "Wrong ticket number", JOptionPane.ERROR_MESSAGE);
+			ticketstatus = Status.Invalid;
+			ticketoptions = "TicketID is not a valid number";
+			ticketname = "";
+			return;
+		}
+		
+		try {
+			Statement statement = connection.createStatement();
+			statement.setQueryTimeout(SQL_TIMEOUT);
 			
 			// lock table
 			statement.executeUpdate("LOCK TABLES "+TABLE_NAME+" WRITE");
@@ -60,6 +150,8 @@ public class DataBase {
 			if(num_rows == 0) {
 				ticketstatus = Status.Invalid;
 				ticketoptions = "TicketID was not found in Database";
+				ticketname = "";
+				return;
 			} else if(num_rows != 1) {
 				JOptionPane.showMessageDialog(parent, "Ticket with ID "+ticketid+" appears more than once in database. Exit.", "Ticket Duplicate", JOptionPane.ERROR_MESSAGE);
 				System.err.println("Ticket with ID "+ticketid+" has "+num_rows+" entry in database, although it should be unique.");
@@ -83,7 +175,8 @@ public class DataBase {
 			}
 
 			ticketoptions = result.getString("options_str");
-
+			ticketname = result.getString("product_str");
+			
 			// Update counter
 			count = Math.min(255,count+1); // Cap at 255, because database counter is only one byte
 			statement.executeUpdate("UPDATE "+TABLE_NAME+" SET use_counter = "+count+" "+CONSTR);
@@ -92,40 +185,48 @@ public class DataBase {
 		} catch (SQLException e) {
 			e.printStackTrace();
 			JOptionPane.showMessageDialog(null, e.getMessage(), "MySQL Exception", JOptionPane.ERROR_MESSAGE);
-		}
-		
-		try{
-			Statement statement = connection.createStatement();
 			
-			// release lock
-			statement.executeUpdate("UNLOCK TABLES");
+			ticketid = "";
+			ticketoptions = "Lookup error";
+			ticketstatus = Status.Invalid;
+			ticketname = "";
+			
+		} finally {
 
-			statement.close();
-		} catch (SQLException e) {
-			e.printStackTrace();
-			JOptionPane.showMessageDialog(null, e.getMessage(), "MySQL Exception", JOptionPane.ERROR_MESSAGE);
+			try{
+				Statement statement = connection.createStatement();
+				statement.setQueryTimeout(SQL_TIMEOUT);
+
+				// release lock
+				statement.executeUpdate("UNLOCK TABLES");
+
+				statement.close();
+			} catch (SQLException e) {
+				e.printStackTrace();
+				JOptionPane.showMessageDialog(null, e.getMessage(), "MySQL Exception", JOptionPane.ERROR_MESSAGE);
+			}
 		}
 	}
 	
-	public static String getTicketID() {
+	public static synchronized String getTicketID() {
 			return ticketid;
 	}
-	public static String getTicketStatus() {
+	public static synchronized String getTicketStatus() {
 		return STR_STATUS[ticketstatus.ordinal()];
 	}
 
-	public static boolean isInvalid() {
+	public static synchronized boolean isInvalid() {
 		return ticketstatus == Status.Invalid;
 	}
 	
-	public static boolean isUnused() {
+	public static synchronized boolean isUnused() {
 		return ticketstatus == Status.Unused;
 	}
 
-	public static boolean isUsed() {
+	public static synchronized boolean isUsed() {
 		return ticketstatus == Status.Used;
 	}
-	public static Color getTicketStatusColor() {
+	public static synchronized Color getTicketStatusColor() {
 		switch(ticketstatus) {
 		case Unused:return Color.GREEN;
 		case Used: return Color.ORANGE;
@@ -134,13 +235,18 @@ public class DataBase {
 		
 		return Color.GRAY;
 	}
-	public static String getTicketOptions() {
+	public static synchronized String getTicketOptions() {
 		return ticketoptions;
 	}
 
-	public static void setTicketStatus(Status st, Component parent) {
+	public static synchronized String getTicketName() {
+		return ticketname;
+	}
+
+	public static synchronized void setTicketStatus(Status st, Component parent) {
 		try {
 			Statement statement = connection.createStatement();
+			statement.setQueryTimeout(SQL_TIMEOUT);
 			statement.executeUpdate("LOCK TABLES "+TABLE_NAME+" WRITE");
 			
 			final String CONSTR = "WHERE ticketid = "+Integer.parseInt(ticketid);
@@ -178,10 +284,12 @@ public class DataBase {
 		} catch (SQLException e) {
 			e.printStackTrace();
 			JOptionPane.showMessageDialog(null, e.getMessage(), "MySQL Exception", JOptionPane.ERROR_MESSAGE);
+			return;
 		}
 		
 		try{
 			Statement statement = connection.createStatement();
+			statement.setQueryTimeout(SQL_TIMEOUT);
 			
 			// release lock
 			statement.executeUpdate("UNLOCK TABLES");
@@ -190,10 +298,14 @@ public class DataBase {
 		} catch (SQLException e) {
 			e.printStackTrace();
 			JOptionPane.showMessageDialog(null, e.getMessage(), "MySQL Exception", JOptionPane.ERROR_MESSAGE);
+			return;
 		}
+		
+		// if succesfull, update status
+		ticketstatus = st;
 	}
 	
-	public static void init() {
+	public static synchronized void init() {
 		
 		// Search config file
 		
@@ -234,6 +346,7 @@ public class DataBase {
 		int port = 3306; 
 		String user = "checkin";
 		String pw = "";
+		String db = "";
 		
 		System.out.println("reading config file");
 		try {
@@ -249,6 +362,8 @@ public class DataBase {
 					user = line.substring(5);
 				} else if(line.startsWith("password ")) {
 					pw = line.substring(9);
+				} else if(line.startsWith("db ")) {
+					db = line.substring(3);
 				} else if(line.startsWith("table ")) {
 					TABLE_NAME = line.substring(6);
 				} else {
@@ -265,10 +380,11 @@ public class DataBase {
 		System.out.println("Using the following database parameters:");
 		System.out.println("  hostname: \t'"+hostname+"'");
 		System.out.println("  port: \t'"+port+"'");
+		System.out.println("  database: \t'"+db+"'");
 		System.out.println("  table: \t'"+TABLE_NAME+"'");
 		System.out.println("  user: \t'"+user+"'");
-		//System.out.println("  password: \t"+pw.length()+" characters");
-		System.out.println("  password: \t'"+pw+"'");
+		System.out.println("  password: \t"+pw.length()+" characters");
+		//System.out.println("  password: \t'"+pw+"'");
 		
 		// load MySQL driver
 		try {
@@ -282,7 +398,8 @@ public class DataBase {
 		// open connection
 		try {
 			connection = DriverManager
-			          .getConnection("jdbc:mysql://"+hostname+":"+port+"/checkin",user,pw);
+			          .getConnection("jdbc:mysql://"+hostname+":"+port+"/"+db,user,pw);
+			
 		} catch (SQLException e) {
 			e.printStackTrace();
 			JOptionPane.showMessageDialog(null, e.getMessage(), "MySQL Exception", JOptionPane.ERROR_MESSAGE);
@@ -290,7 +407,7 @@ public class DataBase {
 		}
 	}
 	
-	public static void updateDB(List<String> events, Component parent) {
+	public static synchronized void updateDB(List<String> events, Component parent) {
 		if(dumpfile == null) {
 			JOptionPane.showMessageDialog(parent, "No data file selected", "IO Exception", JOptionPane.WARNING_MESSAGE);
 			
@@ -313,6 +430,7 @@ public class DataBase {
 		try {
 			// clear table
 			Statement delstatement = connection.createStatement();
+			delstatement.setQueryTimeout(SQL_TIMEOUT);
 			delstatement.executeUpdate("DELETE FROM "+TABLE_NAME);
 			delstatement.close();
 		} catch (SQLException e) {
@@ -355,10 +473,11 @@ public class DataBase {
 		return;
 	}
 	
-	public static boolean checkInReady(Component parent) {
+	public static synchronized boolean checkInReady(Component parent) {
 		boolean ready = false;
 		try {
 			Statement statement = connection.createStatement();
+			statement.setQueryTimeout(SQL_TIMEOUT);
 			
 			// lock table
 			statement.executeUpdate("LOCK TABLES "+TABLE_NAME+" WRITE");
@@ -376,6 +495,7 @@ public class DataBase {
 
 		try{
 			Statement statement = connection.createStatement();
+			statement.setQueryTimeout(SQL_TIMEOUT);
 			
 			// release lock
 			statement.executeUpdate("UNLOCK TABLES");
@@ -388,12 +508,13 @@ public class DataBase {
 		return ready;
 	}
 	
-	public static void setDumpFile(File file) {
+	public static synchronized void setDumpFile(File file) {
 		dumpfile = file.getAbsolutePath();
 	}
 	
-	public static Map<String,String> getEvents(Component parent) {
-		Map<String,String> ret = new HashMap<String,String>();
+	public static synchronized String[][] getEvents(Component parent) {
+		ArrayList<String> models = new ArrayList<String>();
+		ArrayList<String> names = new ArrayList<String>();
 		List<String[]> myEntries;
 		
 		if(dumpfile == null) {
@@ -411,7 +532,7 @@ public class DataBase {
 			JOptionPane.showMessageDialog(parent, e.getMessage(), "IO Exception", JOptionPane.WARNING_MESSAGE);
 			
 			// return empty list
-			return ret;
+			return new String[0][0];
 		}
 		
 		// iterate over lines
@@ -419,11 +540,17 @@ public class DataBase {
 			String model = line[CSV_MODEL];
 			
 			// if model not yet in list, add it
-			if(!ret.containsKey(model)) {
-				ret.put(model, line[CSV_PRODUCT_NAME]);
+			if(!models.contains(model)) {
+				models.add(model);
+				names.add(line[CSV_PRODUCT_NAME]);
 			}
 		}
 		
+		String[][] ret = new String[models.size()][2];
+		for(int i=0;i<models.size();i++) {
+			ret[i][0] = models.get(i);
+			ret[i][1] = names.get(i);
+		}
 		return ret;
 	}
 

@@ -1,30 +1,44 @@
 package checkin;
 
 import java.awt.BorderLayout;
-import java.awt.EventQueue;
-import java.awt.FlowLayout;
+import java.awt.Color;
+import java.awt.Font;
+import java.awt.GridBagConstraints;
+import java.awt.GridBagLayout;
 import java.awt.GridLayout;
+import java.awt.Insets;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.awt.event.FocusAdapter;
 import java.awt.event.FocusEvent;
 import java.io.File;
+import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
 
 import javax.swing.BoxLayout;
 import javax.swing.JButton;
 import javax.swing.JFileChooser;
 import javax.swing.JFrame;
 import javax.swing.JLabel;
-import javax.swing.JList;
 import javax.swing.JOptionPane;
 import javax.swing.JPanel;
+import javax.swing.JScrollPane;
 import javax.swing.JTabbedPane;
+import javax.swing.JTable;
+import javax.swing.JTextArea;
 import javax.swing.JTextField;
 import javax.swing.JToggleButton;
+import javax.swing.ListSelectionModel;
+import javax.swing.SwingConstants;
+import javax.swing.SwingUtilities;
 import javax.swing.border.EmptyBorder;
 import javax.swing.border.TitledBorder;
+import javax.swing.table.DefaultTableModel;
+import javax.swing.table.TableModel;
+import java.awt.FlowLayout;
+import javax.swing.ImageIcon;
+import java.awt.Dimension;
+import javax.swing.border.LineBorder;
 
 public class MainWindow extends JFrame {
 
@@ -39,8 +53,8 @@ public class MainWindow extends JFrame {
 	 * Launch the application.
 	 */
 	public static void main(String[] args) {
-		EventQueue.invokeLater(new Runnable() {
-			public void run() {
+		/*SwingUtilities.invokeLater(new Runnable() {
+			public void run() { //*/
 				DataBase.init();
 				
 				try {
@@ -49,51 +63,41 @@ public class MainWindow extends JFrame {
 				} catch (Exception e) {
 					e.printStackTrace();
 				}
-			}
-		});
+		//	}
+		//});
 	}
 
 	/**
 	 * Create the frame.
 	 */
 	public MainWindow() {
-		final JList<String> list = new JList<String>();
+		setMinimumSize(new Dimension(0, 420));
+		final String[] listHeader = {"Model", "Product name"};
 		final JPanel checkin_tab = new JPanel();
-		final JTextField ticket_id= new JTextField();
-		
-		final JLabel lblStatus = new JLabel("");
-		final JLabel lblOptions = new JLabel("");
-		final JLabel lblTicket = new JLabel("");
+		final JTable list = new JTable( new String[0][0],listHeader);
+		list.getColumnModel().getColumn(1).setPreferredWidth(300);
 		
 		final JToggleButton btnDisable = new JToggleButton("Disable");
 		final JToggleButton btnUnused = new JToggleButton("Unused");
 		final JToggleButton btnUsed = new JToggleButton("Used");
+		final JTextField ticket_id= new JTextField();
 		
-		ticket_id.addActionListener(new ActionListener() {
-			public void actionPerformed(ActionEvent arg0) {
-				String ticketid = ticket_id.getText();
-				DataBase.checkInTicket(ticketid, MainWindow.this);
-				
-				lblStatus.setText(DataBase.getTicketStatus());
-				lblOptions.setText(DataBase.getTicketOptions());
-				
-				// clear field again
-				ticket_id.setText("");
-				ticket_id.requestFocusInWindow();
-				
-				// Update Info Fields
-				lblTicket.setText(DataBase.getTicketID());
-				lblStatus.setText(DataBase.getTicketStatus());
-				lblStatus.setBackground(DataBase.getTicketStatusColor());
-				lblStatus.setOpaque(true);
-				lblOptions.setText(DataBase.getTicketOptions());
-				
-				// Update Buttons
-				btnDisable.setSelected(DataBase.isInvalid());
-				btnUnused.setSelected(DataBase.isUnused());
-				btnUsed.setSelected(DataBase.isUsed());
-			}
-		});
+		final JTextArea lblProduct = new JTextArea("");
+		final JLabel lblStatus = new JLabel("");
+		final JLabel lblOptions = new JLabel("");
+		final JLabel lblTicket = new JLabel("");
+		lblProduct.setLineWrap(true);
+		lblProduct.setWrapStyleWord(true);
+		lblProduct.setOpaque(false);
+		lblProduct.setEditable(false);
+		lblProduct.setFont(new Font("Dialog", Font.BOLD, 12));
+		
+		final JLabel lblStatUnused = new JLabel(DataBase.getNumUnused());
+		final JLabel lblStatUsed = new JLabel(DataBase.getNumUsed());
+		final JLabel lblStatInvalid = new JLabel(DataBase.getNumInvalid());
+		final JLabel lblStatTotal = new JLabel(DataBase.getNumTotal());
+		
+		final JPanel panel_info = new JPanel();
 		
 		checkin_tab.addFocusListener(new FocusAdapter() {
 			@Override
@@ -140,9 +144,13 @@ public class MainWindow extends JFrame {
 							continue;
 						} else {
 							DataBase.setDumpFile(file);
-							Map<String,String> events = DataBase.getEvents(MainWindow.this);
+							final String[][] events = DataBase.getEvents(MainWindow.this);
 							
-							list.setListData((String[])events.keySet().toArray());
+							DefaultTableModel m = new DefaultTableModel(events, listHeader);
+							list.setModel(m);
+							list.getColumnModel().getColumn(1).setPreferredWidth(300);
+							m.fireTableDataChanged();
+							//list.setListData((String[])events.keySet().toArray());
 							break;
 						}
 					} else {
@@ -158,9 +166,12 @@ public class MainWindow extends JFrame {
 		JPanel event_sel = new JPanel();
 		event_sel.setBorder(new TitledBorder(null, "Event Selection", TitledBorder.LEADING, TitledBorder.TOP, null, null));
 		db_tab.add(event_sel);
-		event_sel.setLayout(new FlowLayout(FlowLayout.CENTER, 5, 5));
+		event_sel.setLayout(new BorderLayout(0, 0));
 		
-		event_sel.add(list);
+		JScrollPane scrollPane = new JScrollPane();
+		event_sel.add(scrollPane);
+		scrollPane.setViewportView(list);
+		list.setSelectionMode(ListSelectionModel.MULTIPLE_INTERVAL_SELECTION);
 		
 		JPanel panel = new JPanel();
 		panel.setBorder(new TitledBorder(null, "Prepare ticket list", TitledBorder.LEADING, TitledBorder.TOP, null, null));
@@ -170,7 +181,12 @@ public class MainWindow extends JFrame {
 		panel.add(btnNewButton);
 		btnNewButton.addActionListener(new ActionListener() {
 			public void actionPerformed(ActionEvent arg0) {
-				List<String> events = list.getSelectedValuesList();
+				int[] rows = list.getSelectedRows();
+				List<String> events = new ArrayList<String>();
+				final TableModel m = list.getModel();
+				for(int i=0;i<rows.length;i++) {
+					events.add((String)m.getValueAt(rows[i], 0)); 
+				}
 
 				if(events.isEmpty()) {
 					JOptionPane.showMessageDialog(MainWindow.this, "No events selected, aborting", "No Events", JOptionPane.WARNING_MESSAGE);
@@ -193,41 +209,258 @@ public class MainWindow extends JFrame {
 		checkin_tab.setEnabled(DataBase.checkInReady(this));
 		checkin_tab.setLayout(new BoxLayout(checkin_tab, BoxLayout.Y_AXIS));
 		
+		JPanel panel_1 = new JPanel();
+		checkin_tab.add(panel_1);
+		panel_1.setLayout(new BoxLayout(panel_1, BoxLayout.X_AXIS));
+		
+		JPanel panel_4 = new JPanel();
+		panel_1.add(panel_4);
+		ticket_id.setHorizontalAlignment(SwingConstants.CENTER);
+		
+		ticket_id.addActionListener(new ActionListener() {
+			private final Color proc = Color.GRAY;
+			private final Color def = lblProduct.getForeground();
+			
+			public void actionPerformed(ActionEvent arg0) {
+				// extract entered code
+				final String ticketid = ticket_id.getText();
+				
+				// do not edit (and scan another ticket) untill we are finished with htis one
+				ticket_id.setEditable(false);
+				
+				// update ticket label
+				lblTicket.setText(ticketid);
+				
+				// chenge all other labels to greyed "processing..."
+				lblProduct.setForeground(proc);
+				lblStatus.setForeground(proc);
+				lblOptions.setForeground(proc);
+				lblProduct.setText("processing...");
+				lblStatus.setText("processing...");
+				lblOptions.setText("processing...");
+				
+				// Database operation might block. Keep Swing running by doing everything
+				// else in a separate thread
+				SwingUtilities.invokeLater(new Runnable() {
+					public void run() {
+
+						// Now perform DB operation
+						DataBase.checkInTicket(ticketid, MainWindow.this);
+
+						// update info fields
+						lblOptions.setText(DataBase.getTicketOptions());
+						lblOptions.setForeground(def);
+						lblStatus.setText(DataBase.getTicketStatus());
+						lblStatus.setBackground(DataBase.getTicketStatusColor());
+						lblStatus.setOpaque(true);
+						lblStatus.setForeground(def);
+						lblProduct.setText(DataBase.getTicketName());
+						lblProduct.setForeground(def);
+
+						// Update Info Fields
+						// Update Buttons
+						btnDisable.setSelected(DataBase.isInvalid());
+						btnUnused.setSelected(DataBase.isUnused());
+						btnUsed.setSelected(DataBase.isUsed());
+
+						// clear field again
+						ticket_id.setEditable(true);
+						ticket_id.setText("");
+						ticket_id.requestFocusInWindow();
+						
+						lblStatUnused.setText(DataBase.getNumUnused());
+						lblStatUsed.setText(DataBase.getNumUsed());
+						lblStatInvalid.setText(DataBase.getNumInvalid());
+						lblStatTotal.setText(DataBase.getNumTotal());
+					}
+				});
+			}
+		});
+		panel_4.setLayout(new BoxLayout(panel_4, BoxLayout.Y_AXIS));
+		
+		JPanel panel_5 = new JPanel();
+		panel_5.setMaximumSize(new Dimension(32767, 150));
+		panel_5.setBorder(new TitledBorder(new LineBorder(new Color(184, 207, 229)), "Ticket count", TitledBorder.LEADING, TitledBorder.TOP, null, null));
+		panel_4.add(panel_5);
+		GridBagLayout gbl_panel_5 = new GridBagLayout();
+		gbl_panel_5.columnWidths = new int[] {170, 80};
+		gbl_panel_5.rowHeights = new int[] {21, 21, 21, 21};
+		gbl_panel_5.columnWeights = new double[]{0.0, 0.0};
+		gbl_panel_5.rowWeights = new double[]{0.0, 0.0, 0.0, Double.MIN_VALUE};
+		panel_5.setLayout(gbl_panel_5);
+		
+		lblStatUnused.setHorizontalAlignment(SwingConstants.RIGHT);
+		GridBagConstraints gbc_lblStatUnused = new GridBagConstraints();
+		gbc_lblStatUnused.fill = GridBagConstraints.BOTH;
+		gbc_lblStatUnused.insets = new Insets(0, 0, 5, 5);
+		gbc_lblStatUnused.gridx = 0;
+		gbc_lblStatUnused.gridy = 0;
+		panel_5.add(lblStatUnused, gbc_lblStatUnused);
+		
+		JLabel lblNewLabel_2 = new JLabel("unused");
+		GridBagConstraints gbc_lblNewLabel_2 = new GridBagConstraints();
+		gbc_lblNewLabel_2.fill = GridBagConstraints.BOTH;
+		gbc_lblNewLabel_2.insets = new Insets(0, 0, 5, 5);
+		gbc_lblNewLabel_2.gridx = 1;
+		gbc_lblNewLabel_2.gridy = 0;
+		panel_5.add(lblNewLabel_2, gbc_lblNewLabel_2);
+		
+		GridBagConstraints gbc_lblStatUsed = new GridBagConstraints();
+		gbc_lblStatUsed.anchor = GridBagConstraints.EAST;
+		gbc_lblStatUsed.fill = GridBagConstraints.VERTICAL;
+		gbc_lblStatUsed.insets = new Insets(0, 0, 5, 5);
+		gbc_lblStatUsed.gridx = 0;
+		gbc_lblStatUsed.gridy = 1;
+		panel_5.add(lblStatUsed, gbc_lblStatUsed);
+		
+		JLabel lblUsed = new JLabel("used");
+		GridBagConstraints gbc_lblUsed = new GridBagConstraints();
+		gbc_lblUsed.fill = GridBagConstraints.BOTH;
+		gbc_lblUsed.insets = new Insets(0, 0, 5, 5);
+		gbc_lblUsed.gridx = 1;
+		gbc_lblUsed.gridy = 1;
+		panel_5.add(lblUsed, gbc_lblUsed);
+		
+		GridBagConstraints gbc_lblStatInvalid = new GridBagConstraints();
+		gbc_lblStatInvalid.anchor = GridBagConstraints.EAST;
+		gbc_lblStatInvalid.fill = GridBagConstraints.VERTICAL;
+		gbc_lblStatInvalid.insets = new Insets(0, 0, 5, 5);
+		gbc_lblStatInvalid.gridx = 0;
+		gbc_lblStatInvalid.gridy = 2;
+		panel_5.add(lblStatInvalid, gbc_lblStatInvalid);
+		
+		JLabel lblInvalid = new JLabel("invalid");
+		GridBagConstraints gbc_lblInvalid = new GridBagConstraints();
+		gbc_lblInvalid.insets = new Insets(0, 0, 5, 5);
+		gbc_lblInvalid.fill = GridBagConstraints.BOTH;
+		gbc_lblInvalid.gridx = 1;
+		gbc_lblInvalid.gridy = 2;
+		panel_5.add(lblInvalid, gbc_lblInvalid);
+		gbc_lblStatInvalid.fill = GridBagConstraints.BOTH;
+		gbc_lblStatInvalid.insets = new Insets(0, 0, 0, 5);
+		gbc_lblStatInvalid.gridx = 0;
+		gbc_lblStatInvalid.gridy = 3;
+		gbc_lblInvalid.fill = GridBagConstraints.BOTH;
+		gbc_lblInvalid.gridx = 1;
+		gbc_lblInvalid.gridy = 3;
+		
+		
+		
+		GridBagConstraints gbc_lblStatTotal = new GridBagConstraints();
+		gbc_lblStatTotal.anchor = GridBagConstraints.EAST;
+		gbc_lblStatTotal.insets = new Insets(0, 0, 5, 5);
+		gbc_lblStatTotal.gridx = 0;
+		gbc_lblStatTotal.gridy = 3;
+		panel_5.add(lblStatTotal, gbc_lblStatTotal);
+		
+		JLabel lblTotal = new JLabel("total");
+		GridBagConstraints gbc_lblTotal = new GridBagConstraints();
+		gbc_lblTotal.anchor = GridBagConstraints.WEST;
+		gbc_lblTotal.insets = new Insets(0, 0, 5, 5);
+		gbc_lblTotal.gridx = 1;
+		gbc_lblTotal.gridy = 3;
+		panel_5.add(lblTotal, gbc_lblTotal);
+		
+		
+		
+		
 		JPanel scan_panel = new JPanel();
+		panel_4.add(scan_panel);
 		scan_panel.setBorder(new TitledBorder(null, "Scan", TitledBorder.LEADING, TitledBorder.TOP, null, null));
-		checkin_tab.add(scan_panel);
+		scan_panel.setLayout(new FlowLayout(FlowLayout.CENTER, 5, 5));
 		
 		JLabel lblTicketId = new JLabel("Ticket ID: ");
+		lblTicketId.setHorizontalTextPosition(SwingConstants.CENTER);
+		lblTicketId.setHorizontalAlignment(SwingConstants.CENTER);
 		scan_panel.add(lblTicketId);
 		
 		scan_panel.add(ticket_id);
 		ticket_id.setColumns(10);
 		
-		JPanel info_panel = new JPanel();
-		info_panel.setEnabled(false);
-		info_panel.setBorder(new TitledBorder(null, "Ticket", TitledBorder.LEADING, TitledBorder.TOP, null, null));
-		checkin_tab.add(info_panel);
-		info_panel.setLayout(new BorderLayout(0, 0));
+		JPanel panel_3 = new JPanel();
+		panel_1.add(panel_3);
 		
-		JPanel panel_1 = new JPanel();
-		info_panel.add(panel_1, BorderLayout.NORTH);
-		panel_1.setLayout(new GridLayout(0, 2, 0, 0));
+		JLabel lblNewLabel = new JLabel("");
+		lblNewLabel.setIcon(new ImageIcon(MainWindow.class.getResource("/checkin/logo_small.png")));
+		lblNewLabel.setSize(new Dimension(150, 150));
+		panel_3.add(lblNewLabel);
 		
-		JLabel lblTicketId_1 = new JLabel("Ticket ID:");
-		panel_1.add(lblTicketId_1);
+		JPanel ticketinfo_panel = new JPanel();
+		ticketinfo_panel.setEnabled(false);
+		ticketinfo_panel.setBorder(new TitledBorder(new LineBorder(new Color(184, 207, 229)), "Ticket info", TitledBorder.LEADING, TitledBorder.TOP, null, null));
+		checkin_tab.add(ticketinfo_panel);
+		ticketinfo_panel.setLayout(new BorderLayout(0, 0));
 		
-		panel_1.add(lblTicket);
+		ticketinfo_panel.add(panel_info, BorderLayout.NORTH);
+		GridBagLayout gbl_panel_info = new GridBagLayout();
+		gbl_panel_info.columnWidths = new int[] {100, 310};
+		gbl_panel_info.rowHeights = new int[]{15, 15, 15, 15, 0};
+		gbl_panel_info.columnWeights = new double[]{0.0, 0.0};
+		gbl_panel_info.rowWeights = new double[]{0.0, 0.0, 0.0, 0.0, Double.MIN_VALUE};
+		panel_info.setLayout(gbl_panel_info);
+		
+		JLabel lblTicketId_label = new JLabel("Ticket ID:");
+		GridBagConstraints gbc_lblTicketId_label = new GridBagConstraints();
+		gbc_lblTicketId_label.fill = GridBagConstraints.BOTH;
+		gbc_lblTicketId_label.insets = new Insets(0, 0, 5, 5);
+		gbc_lblTicketId_label.gridx = 0;
+		gbc_lblTicketId_label.gridy = 0;
+		panel_info.add(lblTicketId_label, gbc_lblTicketId_label);
+		
+		GridBagConstraints gbc_lblTicket = new GridBagConstraints();
+		gbc_lblTicket.fill = GridBagConstraints.BOTH;
+		gbc_lblTicket.insets = new Insets(0, 0, 5, 0);
+		gbc_lblTicket.gridx = 1;
+		gbc_lblTicket.gridy = 0;
+		panel_info.add(lblTicket, gbc_lblTicket);
+		
+		JLabel lblProduct_label = new JLabel("Product:");
+		lblProduct_label.setVerticalAlignment(SwingConstants.TOP);
+		GridBagConstraints gbc_lblProduct_label = new GridBagConstraints();
+		gbc_lblProduct_label.fill = GridBagConstraints.BOTH;
+		gbc_lblProduct_label.insets = new Insets(0, 0, 5, 5);
+		gbc_lblProduct_label.gridx = 0;
+		gbc_lblProduct_label.gridy = 1;
+		panel_info.add(lblProduct_label, gbc_lblProduct_label);
+		
+		GridBagConstraints gbc_lblProduct = new GridBagConstraints();
+		gbc_lblProduct.fill = GridBagConstraints.BOTH;
+		gbc_lblProduct.insets = new Insets(0, 0, 5, 0);
+		gbc_lblProduct.gridx = 1;
+		gbc_lblProduct.gridy = 1;
+		panel_info.add(lblProduct, gbc_lblProduct);
 		
 		JLabel lblStatus_label = new JLabel("Status:");
-		panel_1.add(lblStatus_label);
-		panel_1.add(lblStatus);
+		GridBagConstraints gbc_lblStatus_label = new GridBagConstraints();
+		gbc_lblStatus_label.fill = GridBagConstraints.BOTH;
+		gbc_lblStatus_label.insets = new Insets(0, 0, 5, 5);
+		gbc_lblStatus_label.gridx = 0;
+		gbc_lblStatus_label.gridy = 2;
+		panel_info.add(lblStatus_label, gbc_lblStatus_label);
+		
+		GridBagConstraints gbc_lblStatus = new GridBagConstraints();
+		gbc_lblStatus.fill = GridBagConstraints.BOTH;
+		gbc_lblStatus.insets = new Insets(0, 0, 5, 0);
+		gbc_lblStatus.gridx = 1;
+		gbc_lblStatus.gridy = 2;
+		panel_info.add(lblStatus, gbc_lblStatus);
 		
 		JLabel lblOptions_label = new JLabel("Options:");
-		panel_1.add(lblOptions_label);
-		panel_1.add(lblOptions);
+		GridBagConstraints gbc_lblOptions_label = new GridBagConstraints();
+		gbc_lblOptions_label.fill = GridBagConstraints.BOTH;
+		gbc_lblOptions_label.insets = new Insets(0, 0, 0, 5);
+		gbc_lblOptions_label.gridx = 0;
+		gbc_lblOptions_label.gridy = 3;
+		panel_info.add(lblOptions_label, gbc_lblOptions_label);
+		
+		GridBagConstraints gbc_lblOptions = new GridBagConstraints();
+		gbc_lblOptions.fill = GridBagConstraints.BOTH;
+		gbc_lblOptions.gridx = 1;
+		gbc_lblOptions.gridy = 3;
+		panel_info.add(lblOptions, gbc_lblOptions);
 		
 		JPanel panel_2 = new JPanel();
-		info_panel.add(panel_2, BorderLayout.SOUTH);
+		ticketinfo_panel.add(panel_2, BorderLayout.SOUTH);
 		panel_2.setLayout(new GridLayout(1, 0, 0, 0));
 		
 		btnDisable.addActionListener(new ActionListener() {
@@ -238,6 +471,15 @@ public class MainWindow extends JFrame {
 				btnDisable.setSelected(true);
 				btnUnused.setSelected(false);
 				btnUsed.setSelected(false);
+
+				lblStatUnused.setText(DataBase.getNumUnused());
+				lblStatUsed.setText(DataBase.getNumUsed());
+				lblStatInvalid.setText(DataBase.getNumInvalid());
+				lblStatTotal.setText(DataBase.getNumTotal());
+
+				lblStatus.setText(DataBase.getTicketStatus());
+				lblStatus.setBackground(DataBase.getTicketStatusColor());
+				lblStatus.setOpaque(true);
 				
 				ticket_id.requestFocusInWindow();
 			}
@@ -252,6 +494,15 @@ public class MainWindow extends JFrame {
 				btnDisable.setSelected(false);
 				btnUnused.setSelected(true);
 				btnUsed.setSelected(false);
+
+				lblStatUnused.setText(DataBase.getNumUnused());
+				lblStatUsed.setText(DataBase.getNumUsed());
+				lblStatInvalid.setText(DataBase.getNumInvalid());
+				lblStatTotal.setText(DataBase.getNumTotal());
+
+				lblStatus.setText(DataBase.getTicketStatus());
+				lblStatus.setBackground(DataBase.getTicketStatusColor());
+				lblStatus.setOpaque(true);
 				
 				ticket_id.requestFocusInWindow();
 			}
@@ -266,11 +517,19 @@ public class MainWindow extends JFrame {
 				btnDisable.setSelected(false);
 				btnUnused.setSelected(false);
 				btnUsed.setSelected(true);
+
+				lblStatUnused.setText(DataBase.getNumUnused());
+				lblStatUsed.setText(DataBase.getNumUsed());
+				lblStatInvalid.setText(DataBase.getNumInvalid());
+				lblStatTotal.setText(DataBase.getNumTotal());
+
+				lblStatus.setText(DataBase.getTicketStatus());
+				lblStatus.setBackground(DataBase.getTicketStatusColor());
+				lblStatus.setOpaque(true);
 				
 				ticket_id.requestFocusInWindow();
 			}
 		});
 		panel_2.add(btnUsed);
 	}
-
 }
