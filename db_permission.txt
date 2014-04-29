@@ -1,5 +1,0 @@
-Nutzer braucht für checkin folgende Rechte:
-SELECT, LOCK TABLES, UPDATE
-
-Zum anlegen einer neuen Datenbank zusätzlich noch:
-DELETE, INSERT
