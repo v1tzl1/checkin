@@ -23,26 +23,30 @@ import au.com.bytecode.opencsv.CSVReader;
 public class DataBase {
 
 	public enum Status { Undefined, Invalid, Unused, Used}
+	public enum PermissionStatus { Insufficient, Admin, Checkin}
 	
 	private static Connection connection;
-	private final static int CSV_CUSTOMER_EMAIL = 8;
-	private final static int CSV_CUSTOMER_NAME = 7;
-	private final static int CSV_CUSTOMER_PHONE = 9;
+	private static PermissionStatus permStatus = PermissionStatus.Checkin;
+	
+	private final static int CSV_TICKET_NAME = 2;
+	private final static int CSV_TICKET_NUMBER = 3;
+	private final static int CSV_PRODUCT_NAME = 4;
 	private final static int CSV_MODEL = 5;
 	private final static int CSV_OPTIONS = 6;
-	private final static int CSV_PRODUCT_NAME = 4;
 	// Field indices for CSV dump file
-	private final static int CSV_TICKET_NUMBER = 3;
 	
 	private static String dumpfile = null;
-	private static String productname = null;
 	private final static int SQL_TIMEOUT = 0;
-	private final static String[] STR_STATUS = {"Undefined", "Invalid", "Unused", "Used"};
+	private final static String[] STR_STATUS = {"Undefined", "Invalid", "OK", "Used"};
 	private final static Color[] COLOR_STATUS = {Color.GRAY, Color.RED, Color.GREEN, Color.ORANGE};
 	
 	private static String TABLE_NAME = "";
+	private static String db_user = "checkin";
+	private static String db_name = "";
 	
 	private static String ticketid = null;
+	private static String ticketname = null;
+	private static String productname = null;
 	private static String ticketoptions = null;;
 	private static Status ticketstatus = Status.Undefined;
 	
@@ -90,6 +94,7 @@ public class DataBase {
 			//JOptionPane.showMessageDialog(parent, "'"+id+"' is not a valid number", "Wrong ticket number", JOptionPane.ERROR_MESSAGE);
 			ticketstatus = Status.Invalid;
 			ticketoptions = "TicketID is not a valid number";
+			ticketname = "";
 			productname = "";
 			return;
 		}
@@ -109,6 +114,7 @@ public class DataBase {
 			if(num_rows == 0) {
 				ticketstatus = Status.Invalid;
 				ticketoptions = "TicketID was not found in Database";
+				ticketname = "";
 				productname = "";
 				return;
 			} else if(num_rows != 1) {
@@ -135,6 +141,7 @@ public class DataBase {
 
 			ticketoptions = result.getString("options_str");
 			productname = result.getString("product_str");
+			ticketname = result.getString("ticket_str");
 			
 			// Update counter
 			count = Math.min(255,count+1); // Cap at 255, because database counter is only one byte
@@ -148,6 +155,7 @@ public class DataBase {
 			ticketid = "";
 			ticketoptions = "Lookup error";
 			ticketstatus = Status.Invalid;
+			ticketname = "";
 			productname = "";
 			
 		} finally {
@@ -286,6 +294,10 @@ public class DataBase {
 		return Integer.toString(ret);
 	}
 
+	public static synchronized PermissionStatus getPermissions() {
+		return permStatus;
+	}
+	
 	public static synchronized String getProductName() {
 		return productname;
 	}
@@ -294,7 +306,7 @@ public class DataBase {
 			return ticketid;
 	}
 	public static synchronized String getTicketName() {
-		return "not implemented"; // TODO implement ticket name
+		return ticketname;
 	}
 
 	public static synchronized String getTicketOptions() {
@@ -346,9 +358,7 @@ public class DataBase {
 		
 		String hostname = "localhost";
 		int port = 3306; 
-		String user = "checkin";
 		String pw = "";
-		String db = "";
 		
 		System.out.println("reading config file");
 		try {
@@ -361,11 +371,11 @@ public class DataBase {
 				} else if(line.startsWith("port ")) {
 					port = Integer.parseInt(line.substring(5));
 				} else if(line.startsWith("user ")) {
-					user = line.substring(5);
+					db_user = line.substring(5);
 				} else if(line.startsWith("password ")) {
 					pw = line.substring(9);
 				} else if(line.startsWith("db ")) {
-					db = line.substring(3);
+					db_name = line.substring(3);
 				} else if(line.startsWith("table ")) {
 					TABLE_NAME = line.substring(6);
 				} else {
@@ -382,9 +392,9 @@ public class DataBase {
 		System.out.println("Using the following database parameters:");
 		System.out.println("  hostname: \t'"+hostname+"'");
 		System.out.println("  port: \t'"+port+"'");
-		System.out.println("  database: \t'"+db+"'");
+		System.out.println("  database: \t'"+db_name+"'");
 		System.out.println("  table: \t'"+TABLE_NAME+"'");
-		System.out.println("  user: \t'"+user+"'");
+		System.out.println("  user: \t'"+db_user+"'");
 		System.out.println("  password: \t"+pw.length()+" characters");
 		//System.out.println("  password: \t'"+pw+"'");
 		
@@ -400,12 +410,53 @@ public class DataBase {
 		// open connection
 		try {
 			connection = DriverManager
-			          .getConnection("jdbc:mysql://"+hostname+":"+port+"/"+db,user,pw);
+			          .getConnection("jdbc:mysql://"+hostname+":"+port+"/"+db_name,db_user,pw);
 			
 		} catch (SQLException e) {
 			e.printStackTrace();
 			JOptionPane.showMessageDialog(null, e.getMessage(), "MySQL Exception", JOptionPane.ERROR_MESSAGE);
 			System.exit(1);
+		}
+		
+		// check user permissions
+		boolean check_lock = false;
+		
+		boolean check_select = false;
+		boolean check_update = false;
+		boolean check_delete = false;
+		boolean check_insert = false;
+		
+		try {
+			Statement statement = connection.createStatement();
+			statement.setQueryTimeout(SQL_TIMEOUT);
+			
+			ResultSet result = statement.executeQuery("SHOW GRANTS");
+			while(result.next()) {
+				String line = result.getString(1);
+				
+				check_lock |= line.matches("GRANT LOCK TABLES ON `"+db_name+"`.*");
+				check_select |= line.matches("GRANT [, A-Z]*SELECT[, A-Z]* ON `"+db_name+"`\\.`"+TABLE_NAME+"`.*");
+				check_update |= line.matches("GRANT [, A-Z]*UPDATE[, A-Z]* ON `"+db_name+"`\\.`"+TABLE_NAME+"`.*");
+				check_delete |= line.matches("GRANT [, A-Z]*DELETE[, A-Z]* ON `"+db_name+"`\\.`"+TABLE_NAME+"`.*");
+				check_insert |= line.matches("GRANT [, A-Z]*INSERT[, A-Z]* ON `"+db_name+"`\\.`"+TABLE_NAME+"`.*");
+			}
+			
+			statement.close();
+		} catch (SQLException e) {
+			e.printStackTrace();
+		}
+		
+		if(check_lock && check_select && check_update) {
+			// sufficient permissions
+			
+			//check whether we have admin permissions or not
+			if(check_delete && check_insert) {
+				permStatus = PermissionStatus.Admin;
+			} else {
+				permStatus = PermissionStatus.Checkin;
+			}
+		} else {
+			permStatus = PermissionStatus.Insufficient;
 		}
 	}
 
@@ -520,8 +571,8 @@ public class DataBase {
 		}
 		
 		try {
-			// clear table
-			PreparedStatement statement = connection.prepareStatement("INSERT INTO "+TABLE_NAME+" (ticketid, product_str, options_str, customer_str, customer_email, customer_phone, valid, use_counter, use_lastdate) VALUES (?, ?, ?, ?, ?, ?, 1, 0, NOW())");
+			// insert into table
+			PreparedStatement statement = connection.prepareStatement("INSERT INTO "+TABLE_NAME+" (ticketid, ticket_str, product_str, options_str, valid, use_counter) VALUES (?, ?, ?, ?, 1, 0)");
 			for(String line[] : myEntries) {
 				String model = line[CSV_MODEL];
 				
@@ -532,11 +583,9 @@ public class DataBase {
 				
 				// Read parameters from file and add them to the query
 				statement.setInt(1, Integer.parseInt(line[CSV_TICKET_NUMBER]));
-				statement.setString(2, line[CSV_PRODUCT_NAME]);
-				statement.setString(3, line[CSV_OPTIONS]);
-				statement.setString(4, line[CSV_CUSTOMER_NAME]);
-				statement.setString(5, line[CSV_CUSTOMER_EMAIL]);
-				statement.setString(6, line[CSV_CUSTOMER_PHONE]);
+				statement.setString(2, line[CSV_TICKET_NAME]);
+				statement.setString(3, line[CSV_PRODUCT_NAME]);
+				statement.setString(4, line[CSV_OPTIONS]);
 				
 				// run the query
 				statement.executeUpdate();

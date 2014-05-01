@@ -63,6 +63,10 @@ public class MainWindow extends JFrame {
 				try {
 					MainWindow frame = new MainWindow();
 					frame.setVisible(true);
+					if(DataBase.getPermissions() == DataBase.PermissionStatus.Insufficient) {
+						JOptionPane.showMessageDialog(frame, "MySQL user has insufficient permissions", "MySQL Error", JOptionPane.ERROR_MESSAGE);
+						System.exit(1);
+					}
 				} catch (Exception e) {
 					e.printStackTrace();
 				}
@@ -74,7 +78,12 @@ public class MainWindow extends JFrame {
 	 * Create the frame.
 	 */
 	public MainWindow() {
+		
 		setMinimumSize(new Dimension(0, 420));
+		setTitle("Checkin App");
+		setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+		setBounds(100, 100, 450, 300);
+		
 		final String[] listHeader = {"Model", "Product name"};
 		final JPanel checkin_tab = new JPanel();
 		
@@ -89,9 +98,15 @@ public class MainWindow extends JFrame {
 		final JLabel lblStatUnused = new JLabel(DataBase.getNumUnused());
 		lblStatUnused.setAlignmentX(Component.CENTER_ALIGNMENT);
 		
-		final JToggleButton btnDisable = new JToggleButton("Disable");
-		final JToggleButton btnUnused = new JToggleButton("Unused");
+		final JToggleButton btnDisable = new JToggleButton("Invalid");
+		final JToggleButton btnUnused = new JToggleButton("OK");
 		final JToggleButton btnUsed = new JToggleButton("Used");
+		
+		if(DataBase.getPermissions() != DataBase.PermissionStatus.Admin) {
+			btnDisable.setEnabled(false);
+			btnUnused.setEnabled(false);
+			btnUsed.setEnabled(false);
+		}
 		
 		final JLabel lblStatus = new JLabel("");
 		final JTextArea lblOptions = new JTextArea("");
@@ -113,9 +128,6 @@ public class MainWindow extends JFrame {
 			}
 		});
 		
-		setTitle("Checkin App");
-		setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
-		setBounds(100, 100, 450, 300);
 		contentPane = new JPanel();
 		contentPane.setBorder(new EmptyBorder(5, 5, 5, 5));
 		setContentPane(contentPane);
@@ -132,6 +144,9 @@ public class MainWindow extends JFrame {
 		contentPane.add(tabbedPane);
 		
 		JPanel db_tab = new JPanel();
+		if(DataBase.getPermissions() != DataBase.PermissionStatus.Admin) {
+			db_tab.setEnabled(false);
+		}
 		tabbedPane.addTab("Database", null, db_tab, null);
 		db_tab.setLayout(new BoxLayout(db_tab, BoxLayout.Y_AXIS));
 		
@@ -219,7 +234,17 @@ public class MainWindow extends JFrame {
 			}
 		});
 		tabbedPane.addTab("Checkin", null, checkin_tab, null);
-		tabbedPane.setEnabledAt(1, DataBase.checkInReady(this));
+		
+		tabbedPane.setEnabledAt(1, DataBase.checkInReady(this)); // only in checkin tab if data base initialized
+		if(DataBase.getPermissions() != DataBase.PermissionStatus.Admin) {
+			// User
+			tabbedPane.setEnabledAt(0, false); // always in checkin tab
+			tabbedPane.setSelectedIndex(1);
+		} else {
+			// Admin
+			tabbedPane.setEnabledAt(0, true); // data base tab always enabled
+			tabbedPane.setSelectedIndex(DataBase.checkInReady(this) ? 1 : 0);
+		}
 		checkin_tab.setEnabled(DataBase.checkInReady(this));
 		checkin_tab.setLayout(new BoxLayout(checkin_tab, BoxLayout.Y_AXIS));
 		
@@ -473,7 +498,7 @@ public class MainWindow extends JFrame {
 		gbc_lblStatus.gridy = 1;
 		panel_info.add(lblStatus, gbc_lblStatus);
 		
-		JLabel lblProduct_label = new JLabel("Product:");
+		JLabel lblProduct_label = new JLabel("Event:");
 		lblProduct_label.setPreferredSize(new Dimension(91, 15));
 		lblProduct_label.setMinimumSize(new Dimension(91, 15));
 		lblProduct_label.setMaximumSize(new Dimension(91, 15));
@@ -497,7 +522,7 @@ public class MainWindow extends JFrame {
 		gbc_lblProduct.gridy = 3;
 		panel_info.add(lblProduct, gbc_lblProduct);
 		
-		JLabel lblTicketName_label = new JLabel("Ticket Name:");
+		JLabel lblTicketName_label = new JLabel("Option 1:");
 		lblTicketName_label.setHorizontalTextPosition(SwingConstants.CENTER);
 		lblTicketName_label.setVerticalTextPosition(SwingConstants.TOP);
 		lblTicketName_label.setVerticalAlignment(SwingConstants.TOP);
@@ -518,7 +543,7 @@ public class MainWindow extends JFrame {
 		gbc_lblTicketName.gridy = 4;
 		panel_info.add(lblTicketName, gbc_lblTicketName);
 		
-		JLabel lblOptions_label = new JLabel("Options:");
+		JLabel lblOptions_label = new JLabel("Option 2:");
 		lblOptions_label.setMaximumSize(new Dimension(91, 15));
 		lblOptions_label.setMinimumSize(new Dimension(91, 15));
 		lblOptions_label.setPreferredSize(new Dimension(91, 15));
