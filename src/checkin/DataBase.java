@@ -434,11 +434,11 @@ public class DataBase {
 			while(result.next()) {
 				String line = result.getString(1);
 				
-				check_lock |= line.matches("GRANT LOCK TABLES ON `"+db_name+"`.*");
-				check_select |= line.matches("GRANT [, A-Z]*SELECT[, A-Z]* ON `"+db_name+"`\\.`"+TABLE_NAME+"`.*");
-				check_update |= line.matches("GRANT [, A-Z]*UPDATE[, A-Z]* ON `"+db_name+"`\\.`"+TABLE_NAME+"`.*");
-				check_delete |= line.matches("GRANT [, A-Z]*DELETE[, A-Z]* ON `"+db_name+"`\\.`"+TABLE_NAME+"`.*");
-				check_insert |= line.matches("GRANT [, A-Z]*INSERT[, A-Z]* ON `"+db_name+"`\\.`"+TABLE_NAME+"`.*");
+				check_lock |= line.matches("GRANT [, A-Z]*LOCK TABLES[, A-Z]* ON `"+db_name+"`.*");
+				check_select |= line.matches("GRANT [, A-Z]*SELECT[, A-Z]* ON `"+db_name+"`\\.(\\*|`"+TABLE_NAME+"`).*");
+				check_update |= line.matches("GRANT [, A-Z]*UPDATE[, A-Z]* ON `"+db_name+"`\\.(\\*|`"+TABLE_NAME+"`).*");
+				check_delete |= line.matches("GRANT [, A-Z]*DELETE[, A-Z]* ON `"+db_name+"`\\.(\\*|`"+TABLE_NAME+"`).*");
+				check_insert |= line.matches("GRANT [, A-Z]*INSERT[, A-Z]* ON `"+db_name+"`\\.(\\*|`"+TABLE_NAME+"`).*");
 			}
 			
 			statement.close();
